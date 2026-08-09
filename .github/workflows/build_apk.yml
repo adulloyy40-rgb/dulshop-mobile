@@ -35,24 +35,28 @@ jobs:
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           content = manifest.read_text()
 
-          # Izinkan aplikasi menggunakan koneksi HTTP lokal
-          if "android:usesCleartextTraffic" not in content:
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+
+          if permission not in content:
               content = content.replace(
-                  "<application ",
+                  '</manifest>',
+                  f'    {permission}\n</manifest>'
+              )
+
+          if 'android:usesCleartextTraffic=' not in content:
+              content = content.replace(
+                  '<application ',
                   '<application android:usesCleartextTraffic="true" ',
                   1
               )
 
-          # Izinkan akses Internet
-          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
-          if permission not in content:
-              content = content.replace(
-                  "</manifest>",
-                  f"    {permission}\n</manifest>"
-              )
-
           manifest.write_text(content)
           PY
+
+      - name: Verify Android network configuration
+        run: |
+          echo "===== AndroidManifest.xml ====="
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
