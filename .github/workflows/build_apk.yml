@@ -27,6 +27,33 @@ jobs:
       - name: Create Android project
         run: flutter create --platforms=android .
 
+      - name: Configure Android network
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+
+          # Izinkan aplikasi menggunakan koneksi HTTP lokal
+          if "android:usesCleartextTraffic" not in content:
+              content = content.replace(
+                  "<application ",
+                  '<application android:usesCleartextTraffic="true" ',
+                  1
+              )
+
+          # Izinkan akses Internet
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+          if permission not in content:
+              content = content.replace(
+                  "</manifest>",
+                  f"    {permission}\n</manifest>"
+              )
+
+          manifest.write_text(content)
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
