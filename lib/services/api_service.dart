@@ -1,26 +1,61 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.250.173:8000';
+  static const String _serverKey = 'dulshop_server_url';
 
-  // Fungsi untuk Login
-  static Future<Map<String, dynamic>> login(String email, String password) async {
+  static const String defaultBaseUrl =
+      'http://192.168.0.102:8000';
+
+  static Future<String> getBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    return prefs.getString(_serverKey) ?? defaultBaseUrl;
+  }
+
+  static Future<void> setBaseUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    url = url.trim();
+
+    if (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+
+    await prefs.setString(_serverKey, url);
+  }
+
+  static Future<Map<String, dynamic>> login(
+      String email, String password) async {
     try {
+      final baseUrl = await getBaseUrl();
+
       final response = await http.post(
         Uri.parse('$baseUrl/login.php'),
-        body: {'email': email, 'password': password},
+        body: {
+          'email': email,
+          'password': password,
+        },
       );
+
       return jsonDecode(response.body);
     } catch (e) {
-      return {"status": "error", "message": "Gagal terhubung ke server: $e"};
+      return {
+        "status": "error",
+        "message": "Gagal terhubung ke server: $e"
+      };
     }
   }
 
-  // Fungsi untuk Register
   static Future<Map<String, dynamic>> register(
-      String namaLengkap, String email, String password, String telepon) async {
+      String namaLengkap,
+      String email,
+      String password,
+      String telepon) async {
     try {
+      final baseUrl = await getBaseUrl();
+
       final response = await http.post(
         Uri.parse('$baseUrl/register.php'),
         body: {
@@ -31,25 +66,33 @@ class ApiService {
           'role': 'buyer',
         },
       );
+
       return jsonDecode(response.body);
     } catch (e) {
-      return {"status": "error", "message": "Gagal terhubung ke server: $e"};
+      return {
+        "status": "error",
+        "message": "Gagal terhubung ke server: $e"
+      };
     }
   }
 
-  // BARU: Fungsi untuk Mengambil Daftar Produk
   static Future<List<dynamic>> getProducts() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/get_products.php'));
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/get_products.php'),
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Menyesuaikan dengan struktur response dari backend PHP Anda
+
         return data['products'] ?? data['data'] ?? [];
       }
+
       return [];
     } catch (e) {
       return [];
     }
   }
 }
-
