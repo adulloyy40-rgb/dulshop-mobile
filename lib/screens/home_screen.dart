@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-
-import '../services/api_service.dart';
 import 'cart_screen.dart';
 import 'settings_screen.dart';
+import 'address_screen.dart';
+import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final int userId;
@@ -120,6 +120,20 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Refresh',
             onPressed: loadProducts,
           ),
+	  IconButton(
+  icon: const Icon(Icons.location_on_outlined),
+  tooltip: 'Alamat Saya',
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddressScreen(
+          userId: widget.userId,
+        ),
+      ),
+    );
+  },
+),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Pengaturan',

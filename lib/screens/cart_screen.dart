@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'address_screen.dart';
 
 class CartScreen extends StatefulWidget {
   final int userId;
@@ -77,23 +78,200 @@ class _CartScreenState extends State<CartScreen> {
         )}';
   }
 
+  Future<Map<String, dynamic>?> pilihAlamat() async {
+    final address = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddressScreen(
+          userId: widget.userId,
+          pilihAlamat: true,
+        ),
+      ),
+    );
+
+    if (!mounted) return null;
+
+    return address;
+  }
+
+  Future<bool> konfirmasiCheckout(
+    Map<String, dynamic> address,
+  ) async {
+    final label =
+        address['label_alamat']?.toString() ?? 'Alamat';
+
+    final alamat =
+        address['alamat_lengkap']?.toString() ?? '';
+
+    final kota =
+        address['kota']?.toString() ?? '';
+
+    final kodepos =
+        address['kodepos']?.toString() ?? '';
+
+    final alamatLengkap = [
+      alamat,
+      kota,
+      if (kodepos.isNotEmpty) kodepos,
+    ].join(', ');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Checkout'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Alamat Pengiriman',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(alamatLengkap),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Belanja',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      formatPrice(totalHarga),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Biaya pengiriman: Rp 0',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
+              },
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
+              },
+              child: const Text('Buat Pesanan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   Future<void> checkout() async {
     if (cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Keranjang masih kosong.'),
+          content: Text(
+            'Keranjang masih kosong.',
+          ),
         ),
       );
       return;
     }
 
+    // 1. User memilih alamat.
+    final address = await pilihAlamat();
+
+    if (!mounted) return;
+
+    // User membatalkan pemilihan alamat.
+    if (address == null) {
+      return;
+    }
+
+    // 2. Tampilkan konfirmasi.
+    final confirmed =
+        await konfirmasiCheckout(address);
+
+    if (!mounted) return;
+
+    if (!confirmed) {
+      return;
+    }
+
+    final alamat =
+        address['alamat_lengkap']?.toString() ?? '';
+
+    final kota =
+        address['kota']?.toString() ?? '';
+
+    final kodepos =
+        address['kodepos']?.toString() ?? '';
+
+    final alamatPengiriman = [
+      alamat,
+      kota,
+      if (kodepos.isNotEmpty) kodepos,
+    ].join(', ');
+
+    // 3. Kirim alamat terpilih ke API.
     setState(() {
       checkoutLoading = true;
     });
 
     final result = await ApiService.createOrder(
       userId: widget.userId,
-      alamatPengiriman: 'Alamat default',
+      alamatPengiriman: alamatPengiriman,
       biayaPengiriman: 0,
     );
 
@@ -103,6 +281,7 @@ class _CartScreenState extends State<CartScreen> {
       checkoutLoading = false;
     });
 
+    // 4. Tampilkan hasil checkout.
     if (result['status'] == 'success') {
       final data = result['data'] ?? {};
 
@@ -114,9 +293,11 @@ class _CartScreenState extends State<CartScreen> {
 
       await showDialog(
         context: context,
-        builder: (context) {
+        builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Checkout Berhasil'),
+            title: const Text(
+              'Checkout Berhasil',
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment:
@@ -130,17 +311,28 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
                 Text(
                   'Invoice: $invoice',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: 8),
+
                 Text(
                   'Total: ${formatPrice(total)}',
                 ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  'Alamat: $alamatPengiriman',
+                ),
+
                 const SizedBox(height: 12),
+
                 const Text(
                   'Pesanan berhasil dibuat.',
                 ),
@@ -149,7 +341,7 @@ class _CartScreenState extends State<CartScreen> {
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                 },
                 child: const Text('OK'),
               ),
@@ -185,7 +377,7 @@ class _CartScreenState extends State<CartScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
-            onPressed: loading ? null : loadCart,
+            onPressed: loadCart,
           ),
         ],
       ),
@@ -197,6 +389,8 @@ class _CartScreenState extends State<CartScreen> {
               ? RefreshIndicator(
                   onRefresh: loadCart,
                   child: ListView(
+                    physics:
+                        const AlwaysScrollableScrollPhysics(),
                     children: const [
                       SizedBox(height: 180),
                       Center(
@@ -212,7 +406,8 @@ class _CartScreenState extends State<CartScreen> {
                               'Keranjang Anda kosong.',
                               style: TextStyle(
                                 fontSize: 17,
-                                fontWeight: FontWeight.w500,
+                                fontWeight:
+                                    FontWeight.w500,
                               ),
                             ),
                           ],
@@ -227,13 +422,18 @@ class _CartScreenState extends State<CartScreen> {
                       child: RefreshIndicator(
                         onRefresh: loadCart,
                         child: ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: cartItems.length,
-                          itemBuilder: (context, index) {
-                            final item = cartItems[index];
+                          padding:
+                              const EdgeInsets.all(12),
+                          itemCount:
+                              cartItems.length,
+                          itemBuilder:
+                              (context, index) {
+                            final item =
+                                cartItems[index];
 
                             final nama =
-                                item['nama_produk']?.toString() ??
+                                item['nama_produk']
+                                        ?.toString() ??
                                     'Produk';
 
                             final harga =
@@ -255,28 +455,25 @@ class _CartScreenState extends State<CartScreen> {
                                     quantity;
 
                             return Card(
-                              margin: const EdgeInsets.only(
+                              margin:
+                                  const EdgeInsets.only(
                                 bottom: 12,
                               ),
                               child: ListTile(
                                 contentPadding:
-                                    const EdgeInsets.all(12),
-                                leading: const CircleAvatar(
-                                  child: Icon(
-                                    Icons.shopping_bag,
-                                  ),
+                                    const EdgeInsets.all(
+                                  12,
                                 ),
                                 title: Text(
                                   nama,
-                                  maxLines: 2,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style:
+                                      const TextStyle(
                                     fontWeight:
                                         FontWeight.bold,
                                   ),
                                 ),
-                                subtitle: Padding(
+                                subtitle:
+                                    Padding(
                                   padding:
                                       const EdgeInsets.only(
                                     top: 8,
@@ -286,8 +483,11 @@ class _CartScreenState extends State<CartScreen> {
                                   ),
                                 ),
                                 trailing: Text(
-                                  formatPrice(subtotal),
-                                  style: const TextStyle(
+                                  formatPrice(
+                                    subtotal,
+                                  ),
+                                  style:
+                                      const TextStyle(
                                     fontWeight:
                                         FontWeight.bold,
                                   ),
@@ -298,9 +498,12 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                       ),
                     ),
+
                     Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
+                      padding:
+                          const EdgeInsets.all(16),
+                      decoration:
+                          BoxDecoration(
                         color: Theme.of(context)
                             .colorScheme
                             .surface,
@@ -322,15 +525,19 @@ class _CartScreenState extends State<CartScreen> {
                               children: [
                                 const Text(
                                   'Total Harga',
-                                  style: TextStyle(
+                                  style:
+                                      TextStyle(
                                     fontSize: 16,
                                     fontWeight:
                                         FontWeight.bold,
                                   ),
                                 ),
                                 Text(
-                                  formatPrice(totalHarga),
-                                  style: const TextStyle(
+                                  formatPrice(
+                                    totalHarga,
+                                  ),
+                                  style:
+                                      const TextStyle(
                                     fontSize: 18,
                                     fontWeight:
                                         FontWeight.bold,
@@ -338,26 +545,32 @@ class _CartScreenState extends State<CartScreen> {
                                 ),
                               ],
                             ),
+
                             const SizedBox(height: 14),
+
                             SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
+                              width:
+                                  double.infinity,
+                              child:
+                                  ElevatedButton(
                                 onPressed:
                                     checkoutLoading
                                         ? null
                                         : checkout,
-                                child: checkoutLoading
-                                    ? const SizedBox(
-                                        height: 22,
-                                        width: 22,
-                                        child:
-                                            CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Checkout Sekarang',
-                                      ),
+                                child:
+                                    checkoutLoading
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child:
+                                                CircularProgressIndicator(
+                                              strokeWidth:
+                                                  2,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Checkout Sekarang',
+                                          ),
                               ),
                             ),
                           ],

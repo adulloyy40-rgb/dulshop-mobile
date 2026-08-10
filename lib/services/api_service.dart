@@ -190,4 +190,65 @@ class ApiService {
       };
     }
   }
-}
+  static Future<List<dynamic>> getAddresses(int userId) async {
+    try {
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/get_addresses.php?user_id=$userId',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+
+        if (result['status'] == 'success') {
+          return result['data'] ?? [];
+        }
+      }
+
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> addAddress({
+    required int userId,
+    required String labelAlamat,
+    required String alamatLengkap,
+    required String kota,
+    String kodepos = '',
+    int isUtama = 0,
+  }) async {
+    try {
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/add_address.php'),
+        body: {
+          'user_id': userId.toString(),
+          'label_alamat': labelAlamat,
+          'alamat_lengkap': alamatLengkap,
+          'kota': kota,
+          'kodepos': kodepos,
+          'is_utama': isUtama.toString(),
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+
+      return {
+        'status': 'error',
+        'message': 'Gagal menambahkan alamat.',
+      };
+    } catch (e) {
+      return {
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
+      };
+    }
+  }}
