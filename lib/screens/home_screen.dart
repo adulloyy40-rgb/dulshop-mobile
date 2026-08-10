@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+
+import '../services/api_service.dart';
 import 'cart_screen.dart';
 import 'settings_screen.dart';
-import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final int userId;
+
+  const HomeScreen({
+    super.key,
+    required this.userId,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -21,9 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> loadProducts() async {
-    setState(() {
-      loading = true;
-    });
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
 
     final data = await ApiService.getProducts();
 
@@ -42,6 +50,58 @@ class _HomeScreenState extends State<HomeScreen> {
           RegExp(r'\B(?=(\d{3})+(?!\d))'),
           (match) => '.',
         )}';
+  }
+
+  Future<void> addProductToCart(
+    Map<String, dynamic> product,
+  ) async {
+    final productId = int.tryParse(
+      product['id']?.toString() ?? '',
+    );
+
+    if (productId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ID produk tidak valid.'),
+        ),
+      );
+      return;
+    }
+
+    final stok = int.tryParse(
+          product['stok']?.toString() ?? '0',
+        ) ??
+        0;
+
+    if (stok <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Stok produk habis.'),
+        ),
+      );
+      return;
+    }
+
+    final result = await ApiService.addToCart(
+      userId: widget.userId,
+      productId: productId,
+      quantity: 1,
+    );
+
+    if (!mounted) return;
+
+    final success = result['status'] == 'success';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result['message']?.toString() ??
+              (success
+                  ? 'Produk berhasil ditambahkan ke keranjang.'
+                  : 'Gagal menambahkan produk.'),
+        ),
+      ),
+    );
   }
 
   @override
@@ -75,13 +135,17 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
+            icon: const Icon(
+              Icons.shopping_cart_outlined,
+            ),
             tooltip: 'Keranjang',
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const CartScreen(),
+                  builder: (context) => CartScreen(
+                    userId: widget.userId,
+                  ),
                 ),
               );
             },
@@ -116,26 +180,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: 0.72,
+                      childAspectRatio: 0.68,
                     ),
                     itemBuilder: (context, index) {
                       final product = products[index];
 
                       final nama =
-                          product['nama_produk']?.toString() ?? 'Produk';
+                          product['nama_produk']?.toString() ??
+                              'Produk';
 
                       final harga = product['harga'] ?? 0;
 
                       final gambar =
                           product['url_gambar']?.toString() ?? '';
 
-                      final stok = product['stok']?.toString() ?? '0';
+                      final stok =
+                          product['stok']?.toString() ?? '0';
 
                       return Card(
                         clipBehavior: Clip.antiAlias,
                         elevation: 2,
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: gambar.isNotEmpty
@@ -169,7 +236,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     nama,
                                     maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                    overflow:
+                                        TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -185,8 +253,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     'Stok: $stok',
                                     style: TextStyle(
-                                      color: Colors.grey.shade600,
+                                      color: Colors.grey,
                                       fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        addProductToCart(product);
+                                      },
+                                      icon: const Icon(
+                                        Icons.add_shopping_cart,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        'Tambah',
+                                      ),
                                     ),
                                   ),
                                 ],

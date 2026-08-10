@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +20,7 @@ class ApiService {
 
     url = url.trim();
 
-    if (url.endsWith('/')) {
+    while (url.endsWith('/')) {
       url = url.substring(0, url.length - 1);
     }
 
@@ -27,7 +28,9 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> login(
-      String email, String password) async {
+    String email,
+    String password,
+  ) async {
     try {
       final baseUrl = await getBaseUrl();
 
@@ -42,17 +45,18 @@ class ApiService {
       return jsonDecode(response.body);
     } catch (e) {
       return {
-        "status": "error",
-        "message": "Gagal terhubung ke server: $e"
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
       };
     }
   }
 
   static Future<Map<String, dynamic>> register(
-      String namaLengkap,
-      String email,
-      String password,
-      String telepon) async {
+    String namaLengkap,
+    String email,
+    String password,
+    String telepon,
+  ) async {
     try {
       final baseUrl = await getBaseUrl();
 
@@ -70,8 +74,8 @@ class ApiService {
       return jsonDecode(response.body);
     } catch (e) {
       return {
-        "status": "error",
-        "message": "Gagal terhubung ke server: $e"
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
       };
     }
   }
@@ -93,6 +97,97 @@ class ApiService {
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> addToCart({
+    required int userId,
+    required int productId,
+    int quantity = 1,
+    int? variantId,
+  }) async {
+    try {
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/add_to_cart.php'),
+        body: {
+          'user_id': userId.toString(),
+          'product_id': productId.toString(),
+          'quantity': quantity.toString(),
+          if (variantId != null)
+            'variant_id': variantId.toString(),
+        },
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getCart(
+    int userId,
+  ) async {
+    try {
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/get_cart.php?user_id=$userId',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+
+      return {
+        'status': 'error',
+        'message': 'Gagal mengambil data keranjang.',
+      };
+    } catch (e) {
+      return {
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> createOrder({
+    required int userId,
+    String alamatPengiriman = 'Alamat default',
+    double biayaPengiriman = 0,
+  }) async {
+    try {
+      final baseUrl = await getBaseUrl();
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/create_order.php'),
+        body: {
+          'user_id': userId.toString(),
+          'alamat_pengiriman': alamatPengiriman,
+          'biaya_pengiriman':
+              biayaPengiriman.toString(),
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+
+      return {
+        'status': 'error',
+        'message': 'Gagal melakukan checkout.',
+      };
+    } catch (e) {
+      return {
+        'status': 'error',
+        'message': 'Gagal terhubung ke server: $e',
+      };
     }
   }
 }
