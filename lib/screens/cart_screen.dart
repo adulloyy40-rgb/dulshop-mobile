@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'checkout_screen.dart';
 import '../services/api_service.dart';
 import 'address_screen.dart';
 
@@ -94,273 +95,96 @@ class _CartScreenState extends State<CartScreen> {
     return address;
   }
 
-  Future<bool> konfirmasiCheckout(
-    Map<String, dynamic> address,
-  ) async {
-    final label =
-        address['label_alamat']?.toString() ?? 'Alamat';
-
-    final alamat =
-        address['alamat_lengkap']?.toString() ?? '';
-
-    final kota =
-        address['kota']?.toString() ?? '';
-
-    final kodepos =
-        address['kodepos']?.toString() ?? '';
-
-    final alamatLengkap = [
-      alamat,
-      kota,
-      if (kodepos.isNotEmpty) kodepos,
-    ].join(', ');
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Konfirmasi Checkout'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Alamat Pengiriman',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(alamatLengkap),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total Belanja',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      formatPrice(totalHarga),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                const Text(
-                  'Biaya pengiriman: Rp 0',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  false,
-                );
-              },
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  true,
-                );
-              },
-              child: const Text('Buat Pesanan'),
-            ),
-          ],
-        );
-      },
-    );
-
-    return result ?? false;
-  }
-
   Future<void> checkout() async {
     if (cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Keranjang masih kosong.',
-          ),
+          content: Text('Keranjang masih kosong.'),
         ),
       );
       return;
     }
 
-    // 1. User memilih alamat.
+    // Pilih alamat pengiriman terlebih dahulu.
     final address = await pilihAlamat();
 
-    if (!mounted) return;
-
-    // User membatalkan pemilihan alamat.
-    if (address == null) {
+    if (!mounted || address == null) {
       return;
     }
 
-    // 2. Tampilkan konfirmasi.
-    final confirmed =
-        await konfirmasiCheckout(address);
+    // Buka halaman checkout profesional.
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutScreen(
+          address: address,
+          cartItems: cartItems,
+          totalHarga: totalHarga,
+          formatPrice: formatPrice,
+          onCreateOrder: () async {
+            final alamat =
+                address['alamat_lengkap']?.toString() ?? '';
 
-    if (!mounted) return;
+            final kota =
+                address['kota']?.toString() ?? '';
 
-    if (!confirmed) {
-      return;
-    }
+            final kodepos =
+                address['kodepos']?.toString() ?? '';
 
-    final alamat =
-        address['alamat_lengkap']?.toString() ?? '';
+            final alamatPengiriman = [
+              alamat,
+              kota,
+              if (kodepos.isNotEmpty) kodepos,
+            ].join(', ');
 
-    final kota =
-        address['kota']?.toString() ?? '';
+            setState(() {
+              checkoutLoading = true;
+            });
 
-    final kodepos =
-        address['kodepos']?.toString() ?? '';
+            final result = await ApiService.createOrder(
+              userId: widget.userId,
+              alamatPengiriman: alamatPengiriman,
+              biayaPengiriman: 0,
+            );
 
-    final alamatPengiriman = [
-      alamat,
-      kota,
-      if (kodepos.isNotEmpty) kodepos,
-    ].join(', ');
+            if (!mounted) return;
 
-    // 3. Kirim alamat terpilih ke API.
-    setState(() {
-      checkoutLoading = true;
-    });
+            setState(() {
+              checkoutLoading = false;
+            });
 
-    final result = await ApiService.createOrder(
-      userId: widget.userId,
-      alamatPengiriman: alamatPengiriman,
-      biayaPengiriman: 0,
-    );
+            if (result['status'] == 'success') {
+              await loadCart();
 
-    if (!mounted) return;
+              if (!mounted) return;
 
-    setState(() {
-      checkoutLoading = false;
-    });
+              final data = result['data'] ?? {};
+              final invoice =
+                  data['kode_invoice']?.toString() ?? '-';
 
-    // 4. Tampilkan hasil checkout.
-    if (result['status'] == 'success') {
-      final data = result['data'] ?? {};
-
-      final invoice =
-          data['kode_invoice']?.toString() ?? '-';
-
-      final total =
-          data['total_harga'] ?? totalHarga;
-
-      await showDialog(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text(
-              'Checkout Berhasil',
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                const Center(
-                  child: Icon(
-                    Icons.check_circle,
-                    size: 70,
-                    color: Colors.green,
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Pesanan berhasil dibuat. Invoice: $invoice',
                   ),
                 ),
-                const SizedBox(height: 16),
+              );
 
-                Text(
-                  'Invoice: $invoice',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+              Navigator.pop(context);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    result['message']?.toString() ??
+                        'Checkout gagal.',
                   ),
                 ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Total: ${formatPrice(total)}',
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Alamat: $alamatPengiriman',
-                ),
-
-                const SizedBox(height: 12),
-
-                const Text(
-                  'Pesanan berhasil dibuat.',
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-
-      await loadCart();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result['message']?.toString() ??
-                'Checkout gagal.',
-          ),
+              );
+            }
+          },
         ),
-      );
-    }
+      ),
+    );
   }
 
   @override
